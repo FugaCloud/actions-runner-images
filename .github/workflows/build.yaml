@@ -1,0 +1,60 @@
+name: Build and Tag Docker Image
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  # Use docker.io for Docker Hub if empty
+  REGISTRY: ${{ vars.FUGA_REGISTRY_FQDN }}
+  # github.repository as <account>/<repo>
+  IMAGE: public/actions-runner
+
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      # This is used to complete the identity challenge
+      # with sigstore/fulcio when running outside of PRs.
+      id-token: write
+
+    steps:
+    # Checkout the repository
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # Extract the version from the Dockerfile
+    - name: Set version from Dockerfile
+      id: set-version
+      run: |
+        VERSION=$(grep -oP '^FROM ghcr.io/actions/actions-runner:\K[^\s]+' Dockerfile)
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    # Log into Docker (optional, only needed if pushing to a registry)
+    - name: Log in to GitHub Container Registry
+      run: echo "${{ secrets.FUGA_REGISTRY_PASSWORD }}" | docker login ${{ env.REGISTRY }} -u ${{ secrets.FUGA_REGISTRY_USERNAME }} --password-stdin
+
+    # Build the Docker image
+    - name: Build Docker image
+      run: docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ env.VERSION }} .
+
+    # Push the Docker image
+    - name: Push Docker image
+      run: docker push ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ env.VERSION }}
+
+    # Install Cosign (for signing)
+    - name: Install Cosign
+      run: |
+        curl -LO https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64
+        chmod +x cosign-linux-amd64
+        sudo mv cosign-linux-amd64 /usr/local/bin/cosign
+
+    # Sign the Docker image using GitHub OIDC
+    - name: Sign Docker image
+      run: |
+        cosign sign ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ env.VERSION }} \
+        --identity-token "${{ secrets.GITHUB_TOKEN }}"
