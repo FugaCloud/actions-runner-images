@@ -1,6 +1,6 @@
 # GitHub Actions Runner Images by FugaCloud
 
-[![License](https://img.shields.io/github/license/FugaCloud/actions-runner-images)](LICENSE)
+[![Build image](https://github.com/FugaCloud/actions-runner-images/actions/workflows/build.yaml/badge.svg)](https://github.com/FugaCloud/actions-runner-images/actions/workflows/build.yaml)
 
 This repository provides alternative Docker images for self-hosted GitHub Actions runners, serving as a substitute for the official images from [actions/runner-images](https://github.com/actions/runner-images). These images are designed to work seamlessly with the [Actions Runner Controller](https://github.com/actions/actions-runner-controller), including support for Runner Scale Sets as detailed in [GitHub's documentation](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners-with-actions-runner-controller/deploying-runner-scale-sets-with-actions-runner-controller).
 
