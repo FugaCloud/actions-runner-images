@@ -79,7 +79,9 @@ jobs:
       - name: Sign the published Docker image
         env:
           # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
-          TAGS: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ env.VERSION }}\n${{ env.REGISTRY }}/${{ env.IMAGE }}:latest
+          TAGS: |-
+            ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ env.VERSION }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE }}:latest
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
         # This step uses the identity token to provision an ephemeral certificate
         # against the sigstore community Fulcio instance.
