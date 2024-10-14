@@ -26,6 +26,7 @@ The images provided by this repository are pre-built and available at `registry.
 The following tools and features are added compared to the base image:
 
 - curl
+- helm
 
 ## Prerequisites
 
