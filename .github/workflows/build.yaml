@@ -7,13 +7,11 @@ name: Build image
 
 on:
   push:
-    branches:
-      - master
+    tags: [ '*.*.*' ]
 
 env:
   # Use docker.io for Docker Hub if empty
   REGISTRY: ${{ vars.FUGA_REGISTRY_FQDN }}
-  # github.repository as <account>/<repo>
   IMAGE: public/actions-runner
 
 jobs:
@@ -30,16 +28,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Extract the version from the Dockerfile
-      - name: Set version from Dockerfile
-        id: set-version
-        run: |
-          VERSION=$(grep -oP '^FROM ghcr.io/actions/actions-runner:\K[^\s]+' Dockerfile)
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
       # Install the cosign tool except on PR
       # https://github.com/sigstore/cosign-installer
       - name: Install cosign
+        if: github.event_name != 'pull_request'
         uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 #v3.5.0
         with:
           cosign-release: 'v2.2.4'
@@ -53,11 +45,20 @@ jobs:
       # Login against a Docker registry except on PR
       # https://github.com/docker/login-action
       - name: Log into registry ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.FUGA_REGISTRY_USERNAME }}
           password: ${{ secrets.FUGA_REGISTRY_PASSWORD }}
+
+      # Extract metadata (tags, labels) for Docker
+      # https://github.com/docker/metadata-action
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@96383f45573cb7f253c731d3b3ab81c87ef81934 # v5.0.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
       # Build and push Docker image with Buildx (don't push on PR)
       # https://github.com/docker/build-push-action
@@ -66,23 +67,10 @@ jobs:
         uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
         with:
           context: .
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ env.VERSION }},${{ env.REGISTRY }}/${{ env.IMAGE }}:latest
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE }}:buildcache,mode=max,ignore-error=true
-
-      # Sign the resulting Docker image digest except on PRs.
-      # This will only write to the public Rekor transparency log when the Docker
-      # repository is public to avoid leaking data.  If you would like to publish
-      # transparency data even for private images, pass --force to cosign below.
-      # https://github.com/sigstore/cosign
-      - name: Sign the published Docker image
-        env:
-          # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
-          TAGS: |-
-            ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ env.VERSION }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE }}:latest
-          DIGEST: ${{ steps.build-and-push.outputs.digest }}
-        # This step uses the identity token to provision an ephemeral certificate
-        # against the sigstore community Fulcio instance.
-        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max,ignore-error=true
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version || 'dev' }}
